@@ -1,0 +1,36 @@
+{
+    "name": "ms-service-handler",
+    "version": "1.0.0",
+    "build": "b2301180810-1.0.0",
+    "description": "Service handler microservice for the corespace",
+    "main": "service.js",
+    "directories": [
+        "assets"
+    ],
+    "dependencies": {
+        "bash": "^0.0.1",
+        "curl": "^0.1.4",
+        "wget": "^0.0.1",
+        "nodejs": "^0.10.0",
+        "npm": "^3.10.8",
+        "yarn": "^0.15.1"
+    },
+    "devDependencies": {
+        "nano": "^6.3.0"
+    },
+    "scripts": {
+        "start": "node service.js",
+        "dev": "nodemon service.js"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/corespace-api/service_handler.git"
+    },
+    "keywords": [
+        "microservice",
+        "api",
+        "corespace"
+    ],
+    "author": "AsP3X@corespace",
+    "license": "MIT"
+}
