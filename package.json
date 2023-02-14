@@ -1,0 +1,21 @@
+{
+  "name": "service_handler",
+  "version": "1.0.0",
+  "description": "Managing lifetime and service resources",
+  "main": "service.js",
+  "repository": "https://github.com/corespace-api/service_handler.git",
+  "author": "Niklas Vorberg <development@vorberg-webmail.de>",
+  "license": "MIT",
+  "private": false,
+  "scripts": {
+    "dev": "nodemon service.js development",
+    "start": "node service.js production"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.20"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.3",
+    "mongoose": "^6.9.1"
+  }
+}
