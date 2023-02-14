@@ -37,6 +37,11 @@ class Service {
       });
   }
 
+  checkForServiceRemoval() {
+    setInterval(() => {
+    }, this.timer);
+  }
+
   manage() {
     this.serviceManager = new ServiceManager(this.service, 10000, true);
     this.serviceManager.registerService();
