@@ -6,7 +6,6 @@
   "repository": "https://github.com/corespace-api/service_handler.git",
   "author": "Niklas Vorberg <development@vorberg-webmail.de>",
   "license": "MIT",
-  "private": false,
   "scripts": {
     "dev": "nodemon service.js development",
     "start": "node service.js production"
