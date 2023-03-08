@@ -1,43 +1,41 @@
-const dotenv = require("dotenv");
-const crypto = require("crypto");
-const path = require("path");
+const ServiceManager = require('./assets/utils/serviceManager');
 
-const Logger = require("./assets/utils/logger");
-const ServiceManager = require("./assets/utils/serviceManager");
-const { DBConnector } = require("./assets/database/DBManager");
-
-const serviceSchema = require("./assets/models/service");
-
-class Service {
-  constructor(service) {
-    this.service = service;
-    this.logger = new Logger("Service/Manager");
-    this.dbc = new DBConnector();
-    this.timer = 10000;
-    this.config = {};
+class ServiceHandler extends ServiceManager {
+  constructor(name) {
+    super(name);
+    this.fingerprintMiddleware = null;
+    this.cors = null;
   }
 
-  loadConfig() {
-    dotenv.config();
+  gracefulShutdown() {
+    this.logger.log("Gracefully shutting down the service...");
+    this.serviceSchema.findOne({ uuid: this.config.getConfig("uuid") }).then((service) => {
+      if (!service) {
+        this.logger.warn("Service not found in database");
+        process.exit(1);
+      }
 
-    // Load configuration
-    this.config.allowDebug = process.env.ALLOW_DEBUG || false;
-  }
-
-  dbConnection() {
-    // Starting connection to the database
-    this.dbc.createAUrl();
-    this.logger.log(`Starting connection to the database...`);
-    this.logger.log(`Database URL: ${this.dbc.url}`);
-    this.dbc
-      .attemptConnection()
-      .then(() => {
-        this.logger.success("Database connection succeeded");
-      })
-      .catch((error) => {
-        this.logger.log("Database connection failed");
+      service.status = "await_removal";
+      service.command = "user_init_shutdown"
+      service.save().then(() => {
+        this.logger.success("Service status updated to 'await_removal'");
+        process.exit(0);
+      }).catch((error) => {
         this.logger.error(error);
+        process.exit(1);
       });
+    }).catch((error) => {
+      this.logger.error(error);
+      process.exit(1);
+    });
+  }
+
+  loadDependencies() {
+    super.loadDependencies();
+  }
+
+  loadCustomDependencies() {
+    super.loadCustomDependencies();
   }
 
   setStatus(service, status) {
@@ -51,73 +49,78 @@ class Service {
       });
   }
 
-  checkForServiceRemoval() {
-    setInterval(() => {
-      this.logger.log("Checking for services that are older than 1 minute...");
-      // find all services that are older that 1 minute and then set the status to await_removal
-      serviceSchema.find({
-          status: "active",
-          lastSeen: { $lt: new Date(Date.now() - 60000) },
-        }).then((services) => {
-          if (services.length > 0) {
-            services.forEach((service) => {
-              this.logger.info(`Service ${service.uuid} is older than 1 minute`);
-              this.setStatus(service, "await_removal");
-            });
-          }
-        }).catch((error) => {
-          this.logger.error(error);
+  renoveServiceFromDatabase() {
+    this.serviceSchema.find({ status: "await_removal" }).then((services) => {
+      if (services.length > 0) {
+        services.forEach((service) => {
+          this.logger.info(`Removing service ${service.uuid} from database`);
+          service.remove().then(() => {
+            this.logger.success(`Service ${service.uuid} removed from database`);
+          }).catch((error) => {
+            this.logger.error(error);
+          });
         });
-    }, this.timer);
+      }
+    }).catch((error) => {
+      this.logger.error(error);
+    });
   }
 
-  manage() {
-    this.serviceManager = new ServiceManager(this.service, 10000, true);
-    this.serviceManager.registerService();
-    this.serviceManager.listenForKillSignal();
-    this.serviceManager.checkForServiceRemoval();
+  checkForServiceRemoval() {
+    this.logger.log("Checking for services that are older than 1 minute...");
+    // find all services that are older that 1 minute and then set the status to await_removal
+    this.serviceSchema.find({
+        status: "active",
+        lastSeen: { $lt: new Date(Date.now() - 60000) },
+      }).then((services) => {
+        if (services.length > 0) {
+          services.forEach((service) => {
+            this.logger.info(`Service ${service.uuid} is older than 1 minute`);
+            this.setStatus(service, "await_removal");
+          });
+        }
+      }).catch((error) => {
+        this.logger.error(error);
+      });
   }
 
-  refreshStatus() {
+  init() {
+    // default behaviour
+    this.createLogger();
+    this.loadDependencies();
+    this.loadCustomDependencies();
+    this.loadConfig();
+
+    // Create database connection
+    this.dbConnection();
+    this.registerService();
+
+    this.config.setConfig("heartbeat", 10000)
+    this.config.setConfig("listenInterval", 20000)
+    this.heardBeat();
+    this.listenCommands();
+  }
+
+  start() {
+    this.logger.log("Starting Service...");
+
     setInterval(() => {
-      this.serviceManager.setServiceStatus("active").catch((error) => {
-        this.logger.error(error);
-      });
-    }, this.timer);
-  }
-
-  gracefulShutdown() {
-    this.logger.log("Gracefully shutting down the service...");
-    this.dbc.closeConnection();
-    this.serviceManager
-      .unregisterService()
-      .then(() => {
-        this.logger.success("Service shutdown complete");
-        process.exit(1);
-      })
-      .catch((error) => {
-        this.logger.error(error);
-        process.exit(1);
-      });
+      this.checkForServiceRemoval();
+      this.renoveServiceFromDatabase();
+    }, this.config.getConfig("heartbeat"));
   }
 }
 
-const service = new Service({
-  type: "Manager",
-  name: "Manager",
-  uuid: crypto.randomBytes(16).toString("hex"),
-  version: "1.0.0",
-  description: "Service manager for the microservice architecture",
-});
+const serviceHandler = new ServiceHandler("Service Handler");
+serviceHandler.init();
+serviceHandler.start();
 
-service.loadConfig();
-service.dbConnection();
-service.checkForServiceRemoval();
-
-service.manage();
-service.refreshStatus();
 
 // listen for process termination
 process.on("SIGINT", () => {
-  service.gracefulShutdown();
+  serviceHandler.gracefulShutdown();
+});
+
+process.on("SIGTERM", () => {
+  serviceHandler.gracefulShutdown();
 });
