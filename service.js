@@ -86,8 +86,8 @@ class ServiceHandler extends ServiceManager {
 
   init() {
     // default behaviour
-    this.createLogger();
     this.loadDependencies();
+    this.createLogger();
     this.loadCustomDependencies();
     this.loadConfig();
 
